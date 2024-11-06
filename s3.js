@@ -1,15 +1,17 @@
-// S3 bucket name
-const bucketName = 's3-directory-listing';
-const s3Domain = 's3.amazonaws.com';
+const queryString = window.location.search;
+const urlParams = new URLSearchParams(queryString);
+const bucketArg = urlParams.get('bucket')
+
+const s3Domain = window.location.hostname;
 
 const objectList = document.getElementById('object-list');
 const breadcrumb = document.getElementById('breadcrumb');
 const searchInput = document.getElementById('search');
 const loading = document.getElementById('loading');
 const errorAlert = document.getElementById('error');
-const itemsPerPage = 10;
+const itemsPerPage = 50;
 
-let totalPages = 0;
+let totalPages = 1;
 let currentPage = 1;
 let currentPath = '';
 
@@ -17,20 +19,25 @@ function isFolder(key) {
   return key.endsWith('/');
 }
 
-function createDownloadLink(key) {
-  const url = `https://${bucketName}.${s3Domain}/${key}`;
+function createDownloadLink(key,bucket,isRoot=false) {
+  const url = isRoot ? `https://${s3Domain}/${key}/list/view` : `https://${s3Domain}/${bucket}/${key}`; 
   const link = document.createElement('a');
   link.href = url;
 
   // Create the icon element
   const icon = document.createElement('i');
-  icon.className = isFolder(key) ? 'fas fa-folder mr-2' : 'fas fa-file mr-2';
+  if (isRoot)
+    icon.className = 'fas fa-folder mr-2';
+  else
+    icon.className = isFolder(key) ? 'fas fa-folder mr-2' : 'fas fa-file mr-2';
 
   // Create the span element to hold the text
   const textSpan = document.createElement('span');
 
   if (isFolder(key)) {
     textSpan.textContent = key.slice(0, -1).split('/').pop();
+  } else if (isRoot) {
+    textSpan.textContent = key;
   } else {
     textSpan.textContent = key.split('/').pop();
     link.setAttribute('download', '');
@@ -44,19 +51,23 @@ function createDownloadLink(key) {
 }
 
 
-function navigateTo(path) {
+function navigateTo(path,bucket="/") {
   currentPath = path;
-  listObjects(currentPath);
+  listObjects(path,bucket);
+
 }
 
-function updateBreadcrumb(path) {
-  const parts = path.split('/').filter((part) => part);
+function updateBreadcrumb(path,bucket) {
+  let fullpath = bucket + "/" + path
+  const parts = fullpath.split('/').filter((part) => part);
   let crumbPath = '';
 
-  breadcrumb.innerHTML = '<li class="breadcrumb-item"><a href="#">Home</a></li>';
+  breadcrumb.innerHTML = `<li class="breadcrumb-item"><a href="/list/view">Home</a></li>`;
 
   parts.forEach((part, index) => {
-    crumbPath += part + '/';
+    if (index > 0) {
+      crumbPath += part + '/';
+    }
     const listItem = document.createElement('li');
     listItem.className = 'breadcrumb-item';
 
@@ -65,13 +76,15 @@ function updateBreadcrumb(path) {
       listItem.classList.add('active');
     } else {
       const link = document.createElement('a');
-      link.href = '#';
+      link.href = part;
       link.textContent = part;
-      let thisCrumbPath = crumbPath;
+      let thisCrumbPath = bucket + "/" == crumbPath ? "" : crumbPath;
+
       link.onclick = (e) => {
         e.preventDefault();
-        navigateTo(thisCrumbPath);
-      }
+        navigateTo(thisCrumbPath,bucket);
+     }
+
       listItem.appendChild(link);
     }
 
@@ -94,10 +107,11 @@ function formatSize(size) {
   return `${size.toFixed(2)} ${units[index]}`;
 }
 
-function listObjects(path) {
-  const prefix = path ? `prefix=${path}&` : '';
-  const url = `https://${bucketName}.${s3Domain}/?list-type=2&${prefix}delimiter=%2F`;
-
+function listObjects(path,bucket) {
+  const path_e = encodeURIComponent(path);
+  const prefix = path_e ? `&prefix=${path_e}` : '';
+  const url = `https://${s3Domain}/${bucket}/list?list-type=2&delimiter=%2F${prefix}`;
+	
   loading.classList.remove('d-none');
   errorAlert.classList.add('d-none');
 
@@ -113,6 +127,7 @@ function listObjects(path) {
       const xmlDoc = parser.parseFromString(text, 'text/xml');
       const keys = xmlDoc.getElementsByTagName('Key');
       const prefixes = xmlDoc.getElementsByTagName('Prefix');
+      const buckets = xmlDoc.getElementsByTagName('Bucket');
 
       
   // Pagination logic
@@ -122,20 +137,14 @@ function listObjects(path) {
   // Slice the items based on pagination
   const displayedPrefixes = Array.from(prefixes).slice(startIndex, endIndex);
   const displayedKeys = Array.from(keys).slice(startIndex, endIndex - displayedPrefixes.length);
-totalItems = prefixes.length + keys.length;
-totalPages = Math.ceil(totalItems / itemsPerPage);
+  const displayedBuckets = Array.from(buckets).slice(startIndex, endIndex - displayedPrefixes.length);
+  totalItems = prefixes.length + keys.length;
+  totalPages = totalItems / itemsPerPage > 1 ? Math.ceil(totalItems / itemsPerPage) : 1;
   const nextContinuationToken = xmlDoc.querySelector('NextContinuationToken') ? xmlDoc.querySelector('NextContinuationToken').textContent : null;
-  if (nextContinuationToken) {
-    // Enable the "Next" button since there are more items to fetch
-    document.getElementById('nextPage').addEventListener('click', function() {
-      listObjects(currentPath, nextContinuationToken);
-    });
-  } else {
+  if (!nextContinuationToken) {
     document.getElementById('nextPage').disabled = true;
   }
-
-
-objectList.innerHTML = '';
+      objectList.innerHTML = '';
 
       displayedPrefixes.forEach((prefix) => {
         const key = prefix.textContent;
@@ -144,11 +153,11 @@ objectList.innerHTML = '';
         }
         const row = document.createElement('tr');
         const nameCell = document.createElement('td');
-        const link = createDownloadLink(key);
+        const link = createDownloadLink(key,bucket);
 
         link.onclick = (e) => {
           e.preventDefault();
-          navigateTo(key);
+          navigateTo(key,bucket);
         };
 
         nameCell.appendChild(link);
@@ -169,7 +178,7 @@ objectList.innerHTML = '';
         const size = sizeElement ? parseInt(sizeElement.textContent, 10) : NaN;
         const row = document.createElement('tr');
         const nameCell = document.createElement('td');
-        const link = createDownloadLink(key);
+        const link = createDownloadLink(key,bucket);
 
         nameCell.appendChild(link);
         row.appendChild(nameCell);
@@ -178,20 +187,42 @@ objectList.innerHTML = '';
         objectList.appendChild(row);
       });
 
-      updateBreadcrumb(path);
+      if (typeof displayedBuckets != "undefined") {
+	      displayedBuckets.forEach((bucket) => {
+		const key = bucket.querySelector('Name').textContent;
+
+		const creationDate = new Date(bucket.querySelector('CreationDate').textContent);
+		const row = document.createElement('tr');
+		const nameCell = document.createElement('td');
+		const link = createDownloadLink(key,bucket,true);
+/*
+		link.onclick = (e) => {
+		  e.preventDefault();
+		  navigateTo("",key,true);
+		};
+*/
+		nameCell.appendChild(link);
+		row.appendChild(nameCell);
+		row.insertCell(-1).textContent = creationDate.toLocaleString();
+                row.insertCell(-1).textContent = '';
+		objectList.appendChild(row);
+	      });
+      }
+
+      updateBreadcrumb(path,bucket);
 
       
   updatePaginationControls();
   loading.classList.add('d-none');
-loading.classList.add('d-none');
-    })
+  loading.classList.add('d-none');
+    }) //end fetch
     .catch((error) => {
       console.error('Error fetching objects:', error);
       loading.classList.add('d-none');
       errorAlert.textContent = `Error fetching objects: ${error.message}`;
       errorAlert.classList.remove('d-none');
     });
-}
+} //end listobjects
 
 searchInput.addEventListener('input', (e) => {
   const filter = e.target.value.toLowerCase();
@@ -232,25 +263,32 @@ if (localStorage.getItem('darkMode') === 'true') {
   darkModeStyle.disabled = true;
 }
 
+//??
+/*
 breadcrumb.onclick = (e) => {
   e.preventDefault();
   if (e.target.tagName === 'A') {
     navigateTo('');
   }
 };
+*/
 
-navigateTo('');
+window.onload = function () {
+  navigateTo('',bucketArg);
+}
 
 // Pagination controls logic
 document.getElementById('prevPage').addEventListener('click', function() {
   currentPage = Math.max(currentPage - 1, 1);
-  listObjects(currentPath);
+  listObjects(currentPath,bucketArg);
 });
+
 
 document.getElementById('nextPage').addEventListener('click', function() {
   currentPage = Math.min(currentPage + 1, totalPages);
-  listObjects(currentPath);
+  listObjects(currentPath,bucketArg);
 });
+
 
 function updatePaginationControls() {
   document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
