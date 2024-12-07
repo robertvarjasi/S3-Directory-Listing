@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>S3 Directory Listing</title>
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/bootstrap.min.css" type="text/css">
+    <link rel="stylesheet" href="assets/css/all.min.css" type="text/css">
     <style>
         body {
             font-family: Arial, sans-serif;
         }
     </style>
-<link id="dark-mode-style" rel="stylesheet" href="dark-mode.css">
+<link id="dark-mode-style" rel="stylesheet" href="assets/css/dark-mode.css" type="text/css">
 </head>
 <body>
     <div class="container">
@@ -29,6 +29,7 @@
                     <th>Name</th>
                     <th>Last Modified</th>
                     <th>Size</th>
+		    <th><a href="#" id="export-link">Export to CSV</a><input type="checkbox" id="select-all" /></th>
                 </tr>
             </thead>
             <tbody id="object-list">
@@ -55,8 +56,9 @@
             </div>
         </div>        
     </div>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-    <script src="s3v2.js"></script>
+    <script src="assets/js/jquery-3.6.0.min.js"</script>
+    <script src="assets/js/bootstrap.min.js"></script>
+    <script src="assets/js/s3v3.js"></script>
+    <script src="assets/js/export_csv.js"></script>
 </body>
 </html>
